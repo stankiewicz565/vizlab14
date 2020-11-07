@@ -1,0 +1,14 @@
+Package: vizlab14
+Title: visualization package for CSAMA Brixen 2014
+Version: 0.0.14
+Author: VJ Carey <stvjc@channing.harvard.edu>
+Description: visualization package for CSAMA Brixen 2014
+Suggests:  RNAseqData.HNRNPC.bam.chr14, yeastCC, harbChIP, RNAseqData.HNRNPC.bam.chr14,
+	org.Hs.eg.db, org.Sc.sgd.db, gwascat, TxDb.Hsapiens.UCSC.hg19.knownGene, VennDiagram
+Imports: methods, GenomeInfoDb, GenomicRanges, parody, BiocGenerics,
+	GenomicFiles, ggbio, ggplot2, Gviz, ggvis, AnnotationDbi, Rsamtools,
+	IRanges, S4Vectors
+Depends: 
+Maintainer: VJ Carey <stvjc@channing.harvard.edu>
+License: Artistic-2.0
+LazyLoad: yes

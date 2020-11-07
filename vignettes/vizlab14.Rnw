@@ -1,0 +1,669 @@
+
+%\VignetteIndexEntry{CSAMA Brixen 2014: Visualization lab}
+%\VignetteDepends{}
+%\VignetteKeywords{Genomic visualization, statistical modeling}
+%\VignettePackage{viz14}
+\documentclass{article}
+
+<<style, echo=FALSE, results=tex>>=
+BiocStyle::latex()
+@
+\newcommand{\bam}{\texttt{BAM}}
+
+\title{CSAMA Brixen 2014: Visualization lab}
+\author{Vince Carey}
+\date{Modified: 31 May, 2014. Compiled: \today}
+
+\begin{document}
+
+<<code,echo=FALSE>>=
+ps.options(font="serif")
+choptxt = function(x, nwpl=12) {
+ stopifnot(length(x)==1)
+ x = strsplit(x, " ")[[1]]
+ nx = length(x)
+ chunks = ceiling((1:nx)/nwpl)
+ x = split(x, chunks)
+ sapply(x, function(y) paste(y, collapse=" ", sep=""))
+}
+
+genemodel = function(sym, genome="hg19") {
+ stopifnot(genome=="hg19")
+ require(TxDb.Hsapiens.UCSC.hg19.knownGene)
+ require(org.Hs.eg.db)
+ num = get(sym, revmap(org.Hs.egSYMBOL))
+ exonsBy(txdb, by="gene")[[num]]
+}
+
+@
+ 
+
+\maketitle
+
+\tableofcontents
+
+\section{Exploratory data analysis: transcription factor binding in yeast}
+
+The abstract to Harbison et al. 2004, Transcriptional regulatory code of a eukaryotic genome, reads:
+
+<<lka,echo=FALSE>>=
+library(harbChIP)
+if (!exists("harbChIP")) data(harbChIP)
+cat("     ", choptxt(abstract(harbChIP),11),sep="\n   ")
+@
+
+The data for genome-wide location analysis on which this
+is based is found in the \Biocpkg{harbChIP} package.
+<<lkh,eval=FALSE>>=
+library(harbChIP)
+data(harbChIP)
+<<doe>>=
+harbChIP
+@
+
+While the ExpressionSet container is used, the columns correspond
+to DNA-binding proteins used in ChIP-chip experiments on arrays
+composed of probes for intergenic regions of the yeast genome.
+<<lkpro>>=
+sampleNames(harbChIP)[1:10]
+@
+
+\subsection{Outlier detection and declaration of TF binding}
+
+How can we decide which genes are regulated by the
+ACE2 transcription factor?  The viz14 package
+has some tools to help
+visualize the associated genome-wide binding score profile.
+The \Rfunction{calout.detect} procedure of the \Biocpkg{parody}
+package is used to test for outliers according to a
+formal procedure, and a line is drawn at the outlier boundary.
+<<lkv,fig=TRUE,height=4>>=
+library(viz14)
+ace2 = makebs("ACE2")
+ace2
+QQnorm(ace2)
+@
+
+The list of genes that would declared to be bound on the
+basis of `outlying binding score' can be obtained as follows:
+<<lk2>>=
+ace2bnd = boundGenes(ace2)
+@
+
+
+\subsection*{Exercises 1}
+\begin{enumerate}
+
+\item Obtain a list of names of putatively bound genes
+for the transcription factors ACE2, SWI5, SWI6, SWI4, MBP1, FKH1,
+FKH2, NDD1, MCM1.
+\item Using the VennDiagram package, assess
+overlap between five of these bound sets.
+\item Check the documentation for \Rfunction{calout.detect}.
+How would you apply the standard boxplot outlier rules to
+define binding events?
+\end{enumerate}
+
+<<ans,echo=FALSE,results=hide,cache=TRUE>>=
+facs = c("ACE2", "SWI5", "SWI6", "SWI4", "MBP1", 
+   "FKH1", "FKH2", "NDD1", "MCM1")
+bg = lapply(facs, function(x) boundGenes(makebs(x)))
+names(bg) = facs
+sapply(bg,length)
+@
+<<lkven,fig=FALSE,eval=FALSE>>=
+library(VennDiagram)
+v1 = venn.diagram( bg[1:5], filename=NULL )
+grid.draw(v1)
+@
+
+\subsection{Associating binding factors with peak expression times
+in the cell cycle}
+
+The \Robject{trigFits} matrix in the \Biocpkg{viz14} package
+includes information from de Lichtenberg, 
+``Comparison of computational methods for the identification of cell cycle-regulated genes'', Bioinformatics 2005.  The location of peak
+expression times
+is reported for 300 genes considered to have
+periodic expression patterns.  The units are percentage of
+time elapsed from M/G1 boundary to peak expression, in
+variable \texttt{dtf}.
+
+<<lkd>>=
+data(trigFits)
+summary(trigFits[, "dtf"])
+@
+
+Here we obtain the cell cycle percentages
+when available, for gene promoters to which various
+TFs were asserted to bind using the outlier
+detection procedure described above.
+
+<<dolapp,cache=TRUE>>=
+facs = c("ACE2", "SWI5", "SWI6", "SWI4", "MBP1", 
+   "FKH1", "FKH2", "NDD1", "MCM1")
+bg = lapply(facs, function(x) boundGenes(makebs(x)))
+bgrps = lapply(bg, function(x) trigFits[
+   intersect(x, rownames(trigFits)), "dtf" ] ) 
+names(bgrps) = facs
+sapply(bgrps, function(x) length(na.omit(x)))
+@
+
+\subsection*{Exercises 2}
+\begin{enumerate}
+\item Interpret the following plot:
+
+<<dobpbg,fig=TRUE>>=
+boxplot(bgrps, las=2)
+@
+
+\item The TF SKN7 was omitted from \texttt{facs}.
+Introduce the timings
+for gene group associated with SKN7 into the boxplot.
+Interpret the new display in terms of potential
+combinatorial relations among TFs?
+How do you reorder the plot for
+clearer ingestion?
+
+\item Your paper on this finding has been rejected
+with the comment that the figure does not include
+any appraisal of statistical significance.
+How do you respond?
+\end{enumerate}
+
+
+
+
+
+\section{Modeling transcription regulation in the yeast cell cycle}
+
+\subsection{Spellman's data on expression after colony synchronization}
+
+
+The \Biocpkg{yeastCC} package includes an \Rclass{ExpressionSet}
+instance collecting information on a number of cell cycle studies.
+<<getd>>=
+library(yeastCC)
+data(spYCCES)
+spYCCES
+experimentData(spYCCES)
+@
+The package includes a character vector enumerating 800 genes
+deemed transcriptionally regulated in concert with cell cycling.
+<<lkd>>=
+data(orf800)
+orf800[1:4]
+@
+
+The abstract of the paper is bound with the data.
+<<lkabs,echo=FALSE>>=
+cat("     ", choptxt(abstract(spYCCES),11),sep="\n   ")
+@
+
+We'll focus on samples analyzed after synchronization with alpha pheromone.
+<<lka>>=
+alp = spYCCES[ , spYCCES$syncmeth=="alpha"]
+alp
+table(alp$time)
+@
+
+One observation every seven minutes!
+
+\subsection{A nonlinear regression model}
+
+We'll pick a gene with a normalized transcription trajectory
+that appears periodic.  A simple visualization is given in Figure \ref{simp}.
+\begin{figure}
+<<lkg,fig=TRUE>>=
+yal040c = exprs(alp)["YAL040C",]
+df = data.frame(yal040c, time=alp$time)
+plot(yal040c~time, data=df)
+@
+\caption{Expression of YAL040C over time.}
+\label{simp}
+\end{figure}
+
+A simple sinusoidal model is easy to compute with \Rfunction{nls}.
+<<donl>>=
+m1 = nls(yal040c~b*sin(d+a*time),data=df,start=list(d=.1,b=1,a=.1))
+m1
+@
+Note that the parameter estimates from this
+procedure are not unique, and depend on the 
+value supplied to start the algorithm.
+Predictions from convergent fits are unique, however.
+
+\subsection*{Exercises 3}
+
+\begin{enumerate}
+\item Plot the predictions from the nonlinear regression on a
+fine grid of points from 0 to 120 minutes.  Use type = 'l'.
+\item Superimpose the data on these predictions.
+\item Plot the residuals from the model over time.
+\item If you did not use \CRANpkg{ggplot2} for these visualizations,
+please do so.  If you did use \CRANpkg{ggplot2}, use the standard
+graphics.
+\item Enhance the \CRANpkg{ggplot2}-based version with a
+nonparametric model including pointwise
+standard errors.  Interpret.
+\end{enumerate}
+
+
+%XXX solutions to be masked
+
+<<sol,fig=TRUE,echo=FALSE,eval=FALSE,results=hide>>=
+ptime = seq(0,120,.1)
+pex = predict(m1, newdata=list(time=ptime))
+plot(pex~ptime, type="l")
+points(alp$time, yal040c)
+@
+
+
+%XXX solutions to be masked
+
+<<sol2,fig=FALSE,echo=FALSE,eval=FALSE,results=hide>>=
+res = resid(m1)
+plot(res~alp$time)
+@
+
+%XXX solutions to be masked
+
+<<sol3,fig=FALSE,echo=FALSE,eval=FALSE,results=hide>>=
+library(ggplot2)
+prdf = data.frame(pred=pex,time=ptime)
+g1 = ggplot(prdf, aes(x=time,y=pred))
+print(g1 + geom_line() + geom_point(data=df, aes(y=yal040c, x=time)) + 
+   stat_smooth(data=df, aes(y=yal040c, x=time)))
+@
+
+\subsection{A linear least squares procedure}
+
+Suppose that the length of the cell cycle is known to
+be 64 minutes.  We then employ a transformation of time
+to fraction of cycle observed and fit a trigonmetric
+regression as follows.
+<<newm>>=
+df$ptime = 2*pi*(df$time %% 64)/64
+m2 = lm(yal040c ~ sin(ptime) + cos(ptime) -1, data=df)
+summary(m2)
+sum(resid(m1)^2)
+sum(resid(m2)^2)
+@
+Formally we have fit the model $y(t) = a \sin 2\pi \omega t +
+b \cos 2\pi \omega t + e(t)$ where $e(t)$ is an error
+term with mean zero
+and constant variance and $\omega t$ is the
+fraction of the period at which observation $y(t)$ is obtained.
+The amplitude of the sinusoidal model for the mean is then
+$\sqrt{a^2+b^2}$ and the phase is $\tan^{-1}(a/b)$.
+
+The following code will fit such a model, given a
+gene name, an \Rclass{ExpressionSet} instance, and
+a stipulated period.
+<<domod>>=
+gettrm = function(genename, es, period=64) {
+ stopifnot("time" %in% names(pData(es)))
+ ex = exprs(es)[genename,]
+ et = es$time
+ ptime = 2*pi*(df$time %% period)/period
+ ndf = data.frame(time=et, ptime=ptime)
+ ndf[[tolower(substitute(genename))]] = exprs(es)[genename,]
+ fm = as.formula(paste(tolower(substitute(genename)), "~ sin(ptime) + cos(ptime) - 1",
+    sep=" "))
+ lm(fm, data=ndf)
+}
+@
+
+Check:
+<<lkch>>=
+gettrm("YAL040C", alp)
+@
+
+\subsection{Trigonometric regression over the transcriptome}
+
+Collect the mean squared error of prediction (msep), estimated
+amplitude (amp), and estimated phase in the matrix \texttt{outs}.
+Note the use of \texttt{try} to allow simple iteration over the
+whole yeast transcriptome -- some of the fits will fail owing
+to missing data, and the corresponding elements of \texttt{outs}
+are \texttt{NA}.
+<<getmat,cache=TRUE>>=
+outs = matrix(NA, nc=3, nr=nrow(alp))
+yg = featureNames(alp)
+rownames(outs) = yg
+colnames(outs) = c("msep", "amp", "phase")
+suppressMessages({
+for (i in 1:nrow(alp)) {
+  curg = force(yg[i])
+  m = try( gettrm( curg, alp ) )
+  if (inherits(m, "try-error")) next
+  cm = coef(m)
+  outs[i,"msep"] = mean(resid(m)^2)
+  outs[i,"amp"] = sqrt(sum(cm^2))
+  outs[i,"phase"] = atan(-cm[1]/cm[2])
+  }
+})
+@
+ 
+\subsection*{Exercises 4}
+
+\begin{enumerate}
+\item Interpret \texttt{pairs(outs)}.  Choose boundaries
+on msep and amp that identify genes with robust cyclic
+transcription pattern, and subset \texttt{outs} to
+this set of genes.  Is the overlap with Spellman's
+orf800 as you would expect?
+
+\item Find a pair of genes with estimated phase values near -1.0 and 1.0
+respectively.
+Plot the expression trajectories, superimposed, in the (expression,time) plane.
+Justify and suitably display the estimated values of amp for these genes.
+
+\item Following the \CRANpkg{ggplot2} code patterns of the
+lecture, plot these trajectories in polar coordinates.
+
+\item Residual analysis: Obtain the residuals for
+trigonmetric fits to YOL012C and YPL256C and display
+in polar coordinates.  Interpret.
+
+\end{enumerate}
+@
+
+
+\section{RNA-seq application: hnRNP C and Alu exon suppression}
+ 
+Zarnack et al. (2013 Cell) present iCLIP-seq and RNA-seq
+data related to the competition between hnRNP C (heterogeneous
+nuclear ribonucleoproteins C1/C2) and the splicing factor
+U2AF65.  One experiment reported here compares RNA-seq
+read coverage for cells for which an siRNA knockdown
+of hnRNP C was executed, to control HeLa cells.  Alu
+exonization can be observed clearly over an antisense Alu
+element in gene CD55.  Herv\'e Pag\`es has assembled
+BAM files from these experiments in the 
+\Biocpkg{RNAseqData.HNRNPC.bam.chr14} package, and
+we will use this and related metadata to investigate
+this.
+
+\subsection{Alu annotations}
+
+From AnnotationHub, we have a general resource
+on repetitive elements:
+<<lkalu>>=
+library(viz14)
+data(nestrep)
+metadata(nestrep)[[2]]$RDataName
+@
+
+We limit the annotation to Alu elements on
+somatic chromosomes.
+\Biocpkg{ggbio} is used give an overview of the
+genome-wide frequencies of Alu elements, but 
+because the full collection takes time to process,
+we take a sample.
+<<dolim,fig=TRUE>>=
+soma = paste0("chr", 1:22)
+alu = nestrep[ grep("^Alu", nestrep$name) ]
+library(GenomicRanges)
+alu = alu[ which(as.character(seqnames(alu)) %in% soma) ]
+alu14 = alu[ which(seqnames(alu)=="chr14") ]
+seqlevels(alu) = soma
+alus = alu[ sample(1:length(alu), size=5000) ]
+library(ggbio)
+autoplot(alus, layout="karyogram")
+@
+
+We will obtain identifiers and genomic
+extents for genes on chr14 that overlap
+Alu elements.
+<<dotx14>>=
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+ucg = genes(txdb)
+ucg14 = ucg[which(seqnames(ucg)=="chr14")]
+egovalu = as.character(ucg14[which(ucg14 %over% alu14)]$gene_id)
+library(org.Hs.eg.db)
+symovalu = unique(unlist(mget(egovalu, org.Hs.egSYMBOL, ifnotfound=NA)))
+allg14 = get("14", revmap(org.Hs.egCHR))
+alls14 = unlist(mget(allg14, org.Hs.egSYMBOL))
+symnoalu = setdiff(alls14, symovalu)
+@
+
+
+\subsection{Coincidence of Alu elements and genes implicated
+in GWAS}
+
+The \Biocpkg{gwascat} package provides data
+from the NHGRI GWAS catalog.
+
+<<dogwa,keep.source=TRUE>>=
+library(gwascat)
+load(system.file("legacy/ebicat37.rda", package="gwascat"))
+#data(ebicat37)
+ebicat37  # limit to chr14 :
+library(GenomeInfoDb)
+seqlevelsStyle(ebicat37) = "UCSC"
+gwr14 = ebicat37[which(seqnames(ebicat37)=="chr14")]
+@
+
+We will use a very crude approach to estimating
+the proportion of genes harboring Alu elements
+that have been implicated for association with traits
+studied in GWAS.  The \texttt{Mapped\_gene} metadata
+variable is only informally coded.
+<<getrate>>=
+mapped14 = unique(gwr14$Mapped_gene)
+table(mapped14)[1:10]
+@
+
+We estimate the proportion based
+on exact matches between gene symbols
+in the Alu and GWAS annotations.  Application
+of grep would be more effective.
+<<esti>>=
+mean(symovalu %in% mapped14)  # very crude
+@
+
+\subsection{Exonization of Alu element in HNRNPC knockdowns:
+the case of ADSS1}
+
+We work directly from four BAM files to compare first
+replicates of two samples.
+<<doac,fig=TRUE, keep.source=TRUE>>=
+library(GenomicFiles)
+library(Gviz)
+
+GENENAME = "ADSS1"    # gene to analyze
+gm = genemodel(GENENAME)
+rgm = range(gm)
+at = AnnotationTrack(gm, genome="hg19", name=GENENAME)
+
+#  now set up the references to RNA-seq data
+fn = dir(system.file(  # use Herve's package
+  "extdata", package="RNAseqData.HNRNPC.bam.chr14"), full=TRUE,
+  patt="bam$")
+bfv = GenomicFiles(files=fn)  # lightweight reference
+
+# now ingest the BAM data into AlignmentsTrack instances
+STACKTYPE = "hide"      # for Gviz
+kd1a = AlignmentsTrack( files(bfv)[[1]], isPaired=TRUE, 
+    name="KD1a", chromosome="chr14", stacking=STACKTYPE )
+wt1a = AlignmentsTrack( files(bfv)[[5]], isPaired=TRUE, 
+    name="WT1a", chromosome="chr14", stacking=STACKTYPE )
+kd2a = AlignmentsTrack( files(bfv)[[3]], isPaired=TRUE, 
+    name="KD2a", chromosome="chr14", stacking=STACKTYPE )
+wt2a = AlignmentsTrack( files(bfv)[[7]], isPaired=TRUE, 
+    name="WT2a", chromosome="chr14", stacking=STACKTYPE )
+
+gt = GenomeAxisTrack(genome="hg19")
+#data(nestrep)
+#rep14 = nestrep[which(seqnames(nestrep)=="chr14")] 
+#alu14 = rep14[ grep("^Alu", rep14$name) ]
+alut = AnnotationTrack(alu14, genome="hg19", name="Alu")
+ps.options(font="sans")
+plotTracks(list(kd1a, kd2a, wt1a, wt2a, 
+    alut, at, gt), from=start(rgm), to=end(rgm))
+@
+
+\subsection{Exercises 5}
+\begin{enumerate}
+\item Show that, on chr14, genes harboring Alu elements are
+at least 5 times more likely to be identified as
+trait-associated in GWAS as those that do not harbor
+Alu elements.
+\item The use of integer indices in the path-selecting code above
+is fragile.  Use the information in the
+emtab1147sdrf data frame to improve reliability of code for
+these
+selections.
+\item Transform the code for ADSS1 into a function
+that will accept any gene symbol, and use it to investigate
+CGRRF1, PCNX (both mentioned in supplement to Zarnack paper)
+and other genes, for example, those harboring Alu and
+mapped to trait variation in GWAS.
+\end{enumerate}
+
+\section{ggvis: linked, interactive, browser-based visualization}
+
+\subsection{Background and illustration of a ggvis application}
+
+In this section you will have a look at some components that
+push the \textit{grammar of statistical graphics} concepts towards
+a developing \textit{grammar of visualizations},
+see \url{https://github.com/trifacta/vega/wiki/Documentation}.
+Of particular novelty are the interaction scenarios,
+some of which are now supported through \CRANpkg{shiny} reactive programming
+methods; see \url{https://github.com/trifacta/vega/wiki/Interaction-Scenarios}
+for a general discussion of interaction.
+
+This vignette does not address interaction but is concerned mainly
+with some basic examples of confronting genomic data modeling
+for web-based visualization.  We have a function that
+produces, in your browser, data views like
+
+\includegraphics{twoBrow}
+
+based on the RNA-seq data explored in the preceding subsection.
+
+In fact, with the following code, you can generate the
+ADSS1 plot.
+<<setupGGv,eval=FALSE>>=
+library(ggvis)
+library(GenomicFiles)
+library(viz14)
+data(alu14)
+alu14 = alu14[,1:3]
+fn = dir(system.file(
+  "extdata", package="RNAseqData.HNRNPC.bam.chr14"), full=TRUE,
+  patt="bam$")
+bfv = BamFileViews(fn)
+browseWreads()
+@
+
+\subsection{Dissecting the intermediate components}
+
+The code for \texttt{browseWreads} is relatively concise, but
+somewhat clumsy as well.
+<<lkb>>=
+browseWreads
+@
+
+We'll examine the statements in small groups.
+
+<<L1,eval=FALSE>>=
+    base = renderGene(sym, cachedir = cachedir, y = y, y2 = y2, 
+        ylim = ylim, padpct = padpct)
+@
+The \texttt{renderGene} function creates the fundamental
+\texttt{ggvis} instance on the basis of a gene symbol.
+The extraction of genomic coordinates for a gene model
+is costly, and a persistent cache is created to save
+models.  Basic geometric properties of the display
+are determined by the gene model, which will
+be represented as a horizontal collection of rectangles.
+\texttt{ylim} is used to define the extent of the horizontal scale.
+\texttt{y2} is the location of the upper edge of exon rectangles.
+\texttt{padpct} is the percentage of gene model width that is
+taken to pad the presentation on both right and left sides.
+
+The \texttt{renderGene} function can be called on its own.
+As it returns an instance of \texttt{ggvis}, the call, when
+successful
+results in a rendering on the browser identified by
+\texttt{getOption("browser")}.
+
+Here the cache is used to obtain information on extents of the
+gene model:
+<<lkrn,eval=FALSE>>=
+    rng = rangeOfGene(sym, ggmDefC())
+    wid = end(rng) - start(rng)
+    pad = padpct * wid/100
+    left = start(rng) - pad
+@
+
+
+We'll ignore the branch that is present to deal with genes that don't
+subtend Alu elements.
+<<lkal,eval=FALSE>>=
+        return(base %>% rectsAtY(sym = sym, gr = alugr, y = aluy) %>% 
+            addText(sym = "Alu", x = left, y = aluy) %>% readsAtY(sym = sym, 
+            bamf = bamf, y = ready) %>% addText(sym = "reads", 
+            x = left, y = ready))
+@
+The \verb+%>%+ operator allows us to refrain from heavy nesting.
+The base \texttt{ggvis} instance is transformed by calls to
+\texttt{rectsAtY}, \texttt{readsAtY}, and \texttt{addText}.
+Each of these components is defined in \Biocpkg{viz14}.
+
+\begin{itemize}
+\item \texttt{rectsAtY} relates the information in a \texttt{GRanges}
+instance \texttt{gr} to the gene model for \texttt{sym}.  Rectangles
+will be drawn at vertical position given by \texttt{y}.  Full control
+is not offered to the \texttt{browseWreads} to simplify the interface;
+\texttt{rectsAtY} can tailor the sizes of rectangles through additional
+arguments.
+
+\item \texttt{readsAtY} works from a BAM file and plots points
+at basewise coverage values, truncating vertically at 7 in this
+implementation.  More control is available but not propagated to
+the demonstration function \texttt{browseWreads}.
+
+\item \texttt{addText} deals with direct placement of textual
+tokens at selected positions.
+\end{itemize}
+
+\subsection{At a slightly lower level}
+
+Here is the \texttt{renderGene} function.
+Axis handling and padding should be more autonomous and as
+ggvis matures there will undoubtedly be simplifications.
+<<lkren>>=
+renderGene
+@
+
+\subsection{Opportunities for improved functionality}
+
+\begin{enumerate}
+\item Flexible specification of (arbitrarily many) additional tracks.
+\item Brushing to generate local statistics of interest.
+\item Appropriate handling of strand information.
+\item Protocol for managing metadata on BAM filesets and
+propagating that information usefully to the display.
+\item \CRANpkg{shiny} interface allowing selection of tracks including
+\Biocpkg{AnnotationHub} elements.
+\item Interactive filtering of reads to be visualized, based on
+quality criteria or other quantities derivable.
+\item Zoom with translation to read content when scale is sufficiently
+reduced.
+\end{enumerate}
+
+
+\section{Session information}
+
+
+<<lkses>>=
+sessionInfo()
+@
+
+
+\end{document}

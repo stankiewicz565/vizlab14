@@ -1,0 +1,30 @@
+exportPattern("..*")
+
+import(methods)
+
+import(ggbio)
+
+importFrom(Gviz, AnnotationTrack, GenomeAxisTrack,
+  AlignmentsTrack, plotTracks)
+
+importClassFrom(S4Vectors, "Rle")
+
+#importFrom(GenomicFiles, BamFileViews)
+importFrom(Rsamtools, BamFile)
+
+importFrom(BiocGenerics, mget)
+
+importClassFrom(GenomicRanges, GRanges)
+importFrom(GenomicRanges, GRanges)
+importFrom(GenomeInfoDb, seqlevels, seqnames)
+
+importFrom(ggplot2, stat_smooth, geom_point, geom_line, aes, ggplot)
+
+importFrom(parody, calout.detect)
+
+importFrom(ggvis, layer_text, layer_rects, layer_points,
+	add_guide_axis, set_dscale, "%>%")
+
+importFrom(AnnotationDbi, get)
+
+export(genemodel, genemodel.old)
