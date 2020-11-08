@@ -1,6 +1,6 @@
 Package: vizlab14
 Title: visualization package for CSAMA Brixen 2014
-Version: 0.0.14
+Version: 0.0.16
 Author: VJ Carey <stvjc@channing.harvard.edu>
 Description: visualization package for CSAMA Brixen 2014
 Suggests:  RNAseqData.HNRNPC.bam.chr14, yeastCC, harbChIP, RNAseqData.HNRNPC.bam.chr14,

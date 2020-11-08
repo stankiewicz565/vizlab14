@@ -5,8 +5,14 @@ ggmDefC = function() get(load("~/.ggmcache/ggmcache.rda"))  # need reference obj
 browseTracks = function( tlist, ylocs=1:length(tlist), padpct=20,
    rectWidth=.2 ) {}
 
-browseWreads = function(sym="ADSSL1", doAlu=TRUE, alugr=alu14, aluy=2, 
-     bamf = path(fileList(bfv)[[1]]), ready=3,
+ fn = dir(system.file(
+   "extdata", package="RNAseqData.HNRNPC.bam.chr14"), full=TRUE,
+   patt="bam$")
+
+ bfv = GenomicFiles(,fn)
+
+browseWreads = function(sym="ADSS1", doAlu=TRUE, alugr=alu14, aluy=2, 
+     bamf = files(bfv)[1], ready=3,
      cachedir="~/.ggmcache", y=1, y2=1.2, ylim=c(0,6), padpct=20) {
  base = renderGene(sym, cachedir=cachedir, y=y, y2=y2, 
            ylim=ylim, padpct=padpct) # populates cache with relevant info
@@ -22,7 +28,7 @@ browseWreads = function(sym="ADSSL1", doAlu=TRUE, alugr=alu14, aluy=2,
  base %>% readsAtY(sym=sym, bamf=bamf, y=ready) %>% addText(sym="reads", x=left, y=ready) 
 }
 
-renderGene = function(sym="ADSSL1", 
+renderGene = function(sym="ADSS1", 
      cachedir="~/.ggmcache", y=1, y2=1.2, ylim=c(0,6), padpct=20)
   {
 #
@@ -112,7 +118,7 @@ axesForGgv = function(..., chr, nxticks=4, nyticks=0, xgrid=FALSE, ygrid=FALSE,
   add_guide_axis(vis=..., type="y", scale="y", grid=ygrid, orient="left", ticks=nyticks,
      title="") 
 
-renderGeneOLD = function(sym="ADSSL1", 
+renderGeneOLD = function(sym="ADSS1", 
      cachedir="~/.ggmcache", y=1, y2=1.2, ylim=c(0,6), padpct=20)
   {
 #
@@ -133,7 +139,7 @@ renderGeneOLD = function(sym="ADSSL1",
 #   axesForGgv(chr=chrOfGene(sym, ggmcache), ylim=ylim)
   }
 
-renderGene = function(sym="ADSSL1",
+renderGene = function(sym="ADSS1",
      cachedir="~/.ggmcache", y=1, y2=1.2, ylim=c(0,6), padpct=20)
   {
 #
@@ -148,10 +154,10 @@ renderGene = function(sym="ADSSL1",
   gvm %>% exonRects(y=y,y2=y2) %>%
    addText(sym=sym, x=start(rng)-pad, y=y ) %>%
    addText(sym=" ", x=end(rng)+pad, y=y ) %>%
-  set_dscale("y", type="numeric", domain=ylim) %>%
-  add_guide_axis(type="y", scale="y", grid=FALSE, orient="left", ticks=0,
+   scale_numeric("y", range=ylim) %>% # set_dscale("y", type="numeric", domain=ylim) %>%
+  add_axis(type="y", scale="y", grid=FALSE, orient="left", ticks=0,
      title="") %>%
-  add_guide_axis(type="x", scale="x", orient="top", title="chr14",
+  add_axis(type="x", scale="x", orient="top", title=as.character(seqnames(rng)[1]),
      grid=FALSE, ticks=4)
   }
 
